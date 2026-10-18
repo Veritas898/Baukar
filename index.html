@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#ffffff">
+<title>BauKlar</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;background:#f5f6f8;color:#171717}
+button,input,textarea,select{font:inherit}
+button{cursor:pointer}
+header{background:white;padding:22px 18px 15px;position:sticky;top:0;z-index:5;border-bottom:1px solid #eee}
+.head{display:flex;align-items:center;justify-content:space-between}
+h1{font-size:23px;margin:0;font-weight:800}
+h2{font-size:22px;margin:0 0 15px}
+.orange{color:#ed5727}
+.icon{border:0;background:#f5f5f5;border-radius:50%;width:44px;height:44px;font-size:22px}
+main{padding:16px 14px 110px;max-width:750px;margin:auto}
+.search{width:100%;padding:15px;border:0;background:#eaeaea;border-radius:9px;margin:5px 0 15px}
+.card{background:white;border-radius:17px;margin-bottom:12px;overflow:hidden}
+.row{display:flex;align-items:center;gap:14px;padding:18px 15px;border-bottom:1px solid #eee}
+.row:last-child{border-bottom:0}
+.bar{width:5px;align-self:stretch;background:#87d34d;border-radius:3px}
+.info{flex:1;min-width:0}
+.title{font-size:17px;font-weight:750;line-height:1.35}
+.sub{color:#777;font-size:13px;margin-top:7px}
+.more{border:0;background:none;font-size:24px;padding:3px}
+.fab{position:fixed;bottom:105px;right:20px;width:65px;height:65px;border:0;border-radius:50%;background:#ed5727;color:white;font-size:38px;box-shadow:0 5px 18px #0002;z-index:4}
+nav{position:fixed;bottom:0;left:0;right:0;background:white;display:flex;justify-content:space-around;padding:12px 4px 24px;border-radius:22px 22px 0 0;box-shadow:0 -3px 20px #0001;z-index:5}
+nav button{background:none;border:0;font-size:12px;color:#222;min-width:23%;padding:3px}
+nav button span{display:block;font-size:25px;margin-bottom:4px}
+nav button.active{color:#ed5727;font-weight:bold}
+.tabs{display:flex;gap:20px;overflow:auto;background:white;padding:15px 12px;border-bottom:1px solid #ddd}
+.tabs button{white-space:nowrap;background:none;border:0;padding:8px 0;font-weight:650}
+.tabs button.active{color:#ed5727;border-bottom:3px solid #ed5727}
+.panel{background:white;border-radius:15px;padding:17px;margin-bottom:13px}
+label{display:block;font-size:13px;font-weight:700;margin:14px 0 5px}
+input,textarea,select{width:100%;border:1px solid #ddd;border-radius:9px;padding:12px;background:white}
+textarea{min-height:95px}
+.primary{background:#ed5727;color:white;border:0;border-radius:10px;padding:14px 18px;font-weight:750;width:100%;margin-top:18px}
+.secondary{background:#f1f1f1;border:0;border-radius:10px;padding:12px}
+.empty{color:#777;text-align:center;padding:35px 12px}
+.back{border:0;background:none;font-size:25px}
+.tag{font-size:11px;background:#eef8e7;color:#477d2e;padding:5px 8px;border-radius:8px}
+</style>
+</head>
+<body>
+
+<header>
+<div class="head">
+<button class="icon" onclick="goBack()">‹</button>
+<h1 id="heading">Aktive Projekte</h1>
+<button class="icon" onclick="alert('BauKlar Testversion')">⋯</button>
+</div>
+</header>
+
+<div id="tabs" style="display:none"></div>
+<main id="content"></main>
+<button class="fab" id="fab" onclick="addNew()">+</button>
+
+<nav>
+<button onclick="show('projects')" id="nav-projects"><span>⌂</span>Projekte</button>
+<button onclick="show('tasks')" id="nav-tasks"><span>☑</span>Arbeitsbereich</button>
+<button onclick="show('times')" id="nav-times"><span>◷</span>Zeiterfassung</button>
+<button onclick="show('settings')" id="nav-settings"><span>•••</span>Einstellungen</button>
+</nav>
+
+<script>
+const KEY="bauklar_test_v3";
+let db;
+try{
+db=JSON.parse(localStorage.getItem(KEY))||{};
+}catch(e){db={};}
+db.projects ||= [];
+db.tasks ||= [];
+db.times ||= [];
+db.reports ||= [];
+db.files ||= [];
+let page="projects",projectId=null,tab="files";
+
+function save(){localStorage.setItem(KEY,JSON.stringify(db));}
+function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+function id(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
+function current(){return db.projects.find(p=>p.id===projectId);}
+function date(){return new Date().toISOString().slice(0,10);}
+function heading(t){document.getElementById("heading").textContent=t;}
+function setContent(html){document.getElementById("content").innerHTML=html;}
+function goBack(){if(page==="detail")show("projects");else show("projects");}
+function show(p){
+page=p;
+document.getElementById("tabs").style.display="none";
+document.querySelectorAll("nav button").forEach(b=>b.classList.remove("active"));
+let nav=document.getElementById("nav-"+p);
+if(nav)nav.classList.add("active");
+document.getElementById("fab").style.display=p==="settings"?"none":"block";
+if(p==="projects")projects();
+if(p==="detail")detail();
+if(p==="tasks")tasks();
+if(p==="times")times();
+if(p==="settings")settings();
+if(p==="reports")reports();
+}
+
+function projects(){
+heading("Aktive Projekte");
+setContent(`
+<input class="search" id="search" placeholder="⌕  Projekte suchen..." oninput="filterProjects()">
+<div class="card" id="projectList"></div>
+`);
+filterProjects();
+}
+function filterProjects(){
+const q=(document.getElementById("search")?.value||"").toLowerCase();
+const list=db.projects.filter(p=>(p.name+" "+p.address).toLowerCase().includes(q));
+document.getElementById("projectList").innerHTML=list.length?
+list.map(p=>`
+<div class="row" onclick="openProject('${p.id}')">
+<div class="bar"></div>
+<div class="info">
+<div class="title">${esc(p.name)}</div>
+<div class="sub">${esc(p.address||"Keine Adresse")}</div>
+</div>
+<span class="tag">Aktiv</span><span>›</span>
+</div>`).join(""):
+'<div class="empty">Noch keine Projekte.<br>Tippe auf das orange +.</div>';
+}
+function openProject(pid){projectId=pid;tab="files";show("detail");}
+function detail(){
+const p=current();
+if(!p)return show("projects");
+heading(p.name);
+document.getElementById("tabs").style.display="block";
+document.getElementById("tabs").innerHTML=`
+<div class="tabs">
+${["files","reports","tasks","times"].map((t,i)=>`
+<button class="${tab===t?"active":""}" onclick="tab='${t}';detail()">
+${["Dateien","Berichte","Aufgaben","Zeiterfassung"][i]}
+</button>`).join("")}
+</div>`;
+if(tab==="files"){
+const items=db.files.filter(f=>f.project===projectId);
+setContent(`<div class="panel"><b>📁 Projektdateien</b><div class="sub">${esc(p.address)}</div></div>
+<div class="card">${items.length?items.map(f=>`
+<div class="row"><span>📄</span><div class="info"><div class="title">${esc(f.name)}</div><div class="sub">${esc(f.date)}</div></div></div>`).join(""):'<div class="empty">Noch keine Dateien vorhanden.</div>'}</div>
+<div class="panel"><small>In dieser Testversion können Dateinamen erfasst werden. Echte Uploads folgen später.</small></div>`);
+}
+if(tab==="reports")reports(true);
+if(tab==="tasks")tasks(true);
+if(tab==="times")times(true);
+}
+
+function tasks(inProject=false){
+if(!inProject)heading("Arbeitsbereich");
+const items=db.tasks.filter(t=>!inProject||t.project===projectId);
+setContent(`<h2>Aufgaben & Mängel</h2><div class="card">
+${items.length?items.map(t=>`
+<div class="row">
+<input type="checkbox" style="width:23px" ${t.done?"checked":""} onchange="toggleTask('${t.id}')">
+<div class="info"><div class="title">${esc(t.title)}</div><div class="sub">${esc(projectName(t.project))} · ${esc(t.date)}</div></div>
+</div>`).join(""):'<div class="empty">Noch keine Aufgaben oder Mängel.</div>'}
+</div>`);
+}
+function toggleTask(tid){let t=db.tasks.find(x=>x.id===tid);if(t){t.done=!t.done;save();show(page);}}
+
+function times(inProject=false){
+if(!inProject)heading("Zeiterfassung");
+const items=db.times.filter(t=>!inProject||t.project===projectId);
+setContent(`<h2>Zeiterfassung</h2><div class="card">
+${items.length?items.map(t=>`
+<div class="row"><span>◷</span><div class="info">
+<div class="title">${esc(t.hours)} Stunden</div>
+<div class="sub">${esc(projectName(t.project))} · ${esc(t.date)} · ${esc(t.note)}</div>
+</div></div>`).join(""):'<div class="empty">Noch keine Zeiten erfasst.</div>'}
+</div>`);
+}
+function reports(inProject=false){
+if(!inProject)heading("Bautagesberichte");
+const items=db.reports.filter(r=>!inProject||r.project===projectId);
+setContent(`<h2>Bautagesberichte</h2><div class="card">
+${items.length?items.map(r=>`
+<div class="row"><span>▤</span><div class="info">
+<div class="title">${esc(r.date)} – ${esc(projectName(r.project))}</div>
+<div class="sub">${esc(r.text)}</div>
+</div></div>`).join(""):'<div class="empty">Noch keine Berichte vorhanden.</div>'}
+</div>`);
+}
+function projectName(pid){return db.projects.find(p=>p.id===pid)?.name||"Projekt gelöscht";}
+function options(){return db.projects.map(p=>`<option value="${p.id}" ${p.id===projectId?"selected":""}>${esc(p.name)}</option>`).join("");}
+function form(title,fields,fn){
+heading(title);
+document.getElementById("tabs").style.display="none";
+setContent(`<div class="panel"><form id="entry">${fields}<button class="primary">Speichern</button></form></div>`);
+document.getElementById("entry").onsubmit=e=>{e.preventDefault();fn(new FormData(e.target));};
+}
+function addNew(){
+if(page==="projects")return newProject();
+if(page==="tasks"||(page==="detail"&&tab==="tasks"))return newTask();
+if(page==="times"||(page==="detail"&&tab==="times"))return newTime();
+if(page==="reports"||(page==="detail"&&tab==="reports"))return newReport();
+if(page==="detail"&&tab==="files")return newFile();
+newProject();
+}
+function newProject(){
+form("Neue Baustelle",`
+<label>Projektname *</label><input name="name" required placeholder="z. B. Neubau Musterstraße">
+<label>Adresse</label><input name="address" placeholder="Straße, Ort">
+<label>Auftraggeber</label><input name="customer" placeholder="Name">
+`,f=>{
+db.projects.unshift({id:id(),name:f.get("name"),address:f.get("address"),customer:f.get("customer")});
+save();show("projects");
+});
+}
+function newTask(){
+if(!db.projects.length)return alert("Bitte zuerst eine Baustelle anlegen.");
+form("Neue Aufgabe / Mangel",`
+<label>Baustelle</label><select name="project">${options()}</select>
+<label>Aufgabe / Mangel *</label><textarea name="title" required></textarea>
+<label>Fällig am</label><input type="date" name="date" value="${date()}">
+`,f=>{
+db.tasks.unshift({id:id(),project:f.get("project"),title:f.get("title"),date:f.get("date"),done:false});
+save();show("tasks");
+});
+}
+function newTime(){
+if(!db.projects.length)return alert("Bitte zuerst eine Baustelle anlegen.");
+form("Zeit erfassen",`
+<label>Baustelle</label><select name="project">${options()}</select>
+<label>Datum</label><input type="date" name="date" value="${date()}">
+<label>Stunden</label><input type="number" name="hours" step="0.25" min="0.25" required placeholder="8">
+<label>Tätigkeit</label><textarea name="note"></textarea>
+`,f=>{
+db.times.unshift({id:id(),project:f.get("project"),date:f.get("date"),hours:f.get("hours"),note:f.get("note")});
+save();show("times");
+});
+}
+function newReport(){
+if(!db.projects.length)return alert("Bitte zuerst eine Baustelle anlegen.");
+form("Neuer Bautagesbericht",`
+<label>Baustelle</label><select name="project">${options()}</select>
+<label>Datum</label><input type="date" name="date" value="${date()}">
+<label>Arbeiten / Material / Besonderheiten</label><textarea name="text" required></textarea>
+`,f=>{
+db.reports.unshift({id:id(),project:f.get("project"),date:f.get("date"),text:f.get("text")});
+save();tab="reports";show("detail");
+});
+}
+function newFile(){
+form("Datei erfassen",`
+<label>Dateiname *</label><input name="name" required placeholder="Bautagesbericht.pdf">
+`,f=>{
+db.files.unshift({id:id(),project:projectId,name:f.get("name"),date:date()});
+save();tab="files";show("detail");
+});
+}
+function settings(){
+heading("Einstellungen");
+setContent(`
+<div class="panel"><h2>BauKlar</h2>
+<p>Lokale Testversion auf diesem Gerät.</p>
+<p style="color:#b54b28"><b>Wichtig:</b> Die Daten werden nur in diesem Browser gespeichert. Keine Cloud-Synchronisierung.</p>
+<button class="primary" onclick="exportData()">Datensicherung exportieren</button>
+<label>Datensicherung importieren</label>
+<input type="file" accept=".json,application/json" onchange="importData(event)">
+</div>
+<div class="panel">
+<button class="secondary" onclick="if(confirm('Alle lokalen Daten löschen?')){localStorage.removeItem(KEY);location.reload()}">Alle Testdaten löschen</button>
+</div>`);
+}
+function exportData(){
+const blob=new Blob([JSON.stringify(db,null,2)],{type:"application/json"});
+const a=document.createElement("a");a.href=URL.createObjectURL(blob);
+a.download="BauKlar-Sicherung.json";a.click();URL.revokeObjectURL(a.href);
+}
+async function importData(e){
+const file=e.target.files[0];if(!file)return;
+try{
+const data=JSON.parse(await file.text());
+if(!Array.isArray(data.projects))throw Error("Ungültige Sicherung");
+if(confirm("Aktuelle Daten durch Sicherung ersetzen?")){
+db=data;save();show("projects");
+}
+}catch(err){alert("Sicherung konnte nicht gelesen werden.");}
+}
+show("projects");
+</script>
+</body>
+</html>
